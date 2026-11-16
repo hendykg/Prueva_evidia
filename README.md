@@ -36,7 +36,7 @@ Incluye el procesamiento de **Hilt** y **Room** (KSP) sin errores.
 | Lenguaje | Kotlin | `language`/`jvmTarget` 17, todo el código en Kotlin |
 | Interfaz | Jetpack Compose + Material 3 | `ui/` (pantallas, componentes, tema) |
 | Arquitectura | MVVM + Repository | `ui/viewmodel/` + `domain/repository/` + `data/repository/` |
-| API | Retrofit + Gson | `di/NetworkModule.kt`, `data/remote/EventiaApi.kt` |
+| API | Retrofit + Gson | `data/remote/RetrofitRepository.kt` (object `by lazy`, patrón del curso) + `di/NetworkModule.kt` (cliente OkHttp con Bearer) |
 | Base de datos local | Room | `data/local/EventiaDatabase.kt` (events, categories, favorites, venues) |
 | Sesión | DataStore | `data/datastore/SessionDataStore.kt` (token y última sincronización) |
 | Inyección de dependencias | Hilt + `@HiltViewModel` | `di/` (3 módulos) + ViewModels anotados |
@@ -44,7 +44,7 @@ Incluye el procesamiento de **Hilt** y **Room** (KSP) sin errores.
 | Procesos asíncronos | Kotlin Coroutines | `viewModelScope`, `Flow`, `withTransaction` |
 | Navegación | Navigation Compose | `ui/navigation/EventiaNavGraph.kt` |
 | Imágenes | Coil | `AsyncImage` en `EventCard` |
-| Mapas | Maps Compose (aprobada) | Dependencia agregada, pendiente de implementar |
+| Mapas | Maps Compose (aprobada) | `ui/screens/MapScreen.kt` + `ui/viewmodel/MapViewModel.kt` (marcadores, filtro y geo:) |
 | Versionamiento | Git con etiqueta final `v1.0` | Pendiente: etiqueta al cierre |
 | DTO → Dominio | Obligatorio | `data/mapper/EventMapper.kt`, `VenueMapper.kt` |
 
@@ -60,10 +60,10 @@ Prueva_evidia/
 │   ├── libs.versions.toml            # Catálogo de versiones/dependencias
 │   └── wrapper/                      # Gradle 8.11.1
 ├── app/
-│   ├── build.gradle.kts              # Dependencias + BuildConfig.BASE_URL
+│   ├── build.gradle.kts              # Dependencias + versiones
 │   ├── proguard-rules.pro
 │   └── src/main/
-│       ├── AndroidManifest.xml       # INTERNET, estado de red, cleartext para localhost
+│       ├── AndroidManifest.xml       # INTERNET, estado de red, <queries> geo, cleartext
 │       ├── res/values/               # strings, themes
 │       └── java/com/example/eventia/
 │           ├── EventiaApplication.kt         # @HiltAndroidApp
@@ -75,10 +75,11 @@ Prueva_evidia/
 │           ├── data/
 │           │   ├── NetworkMonitor.kt         # Estado de conexión (StateFlow<Boolean>)
 │           │   ├── remote/
+│           │   │   ├── RetrofitRepository.kt  # object + BASE_URL + Retrofit "by lazy" (patrón del curso)
 │           │   │   ├── EventiaApi.kt         # Interfaz Retrofit (12 endpoints)
 │           │   │   ├── AuthInterceptor.kt    # Cabecera Authorization: Bearer
 │           │   │   ├── ApiError.kt           # ApiException(code) + mensajes del servidor
-│           │   │   └── dto/EventDto.kt       # DTOs (provisionales, ajustar al JSON real)
+│           │   │   └── dto/EventDto.kt       # DTOs alineados a la colección Postman
 │           │   ├── local/
 │           │   │   ├── EventiaDatabase.kt    # v3: events, categories, favorites, venues
 │           │   │   ├── dao/                  # EventDao, VenueDao, FavoriteDao
@@ -96,12 +97,14 @@ Prueva_evidia/
 │           │   ├── model/                    # Event, Category, Venue, User, Attendance
 │           │   └── repository/               # Interfaces: Events, Venues, Favorites, Auth, Attendance
 │           └── ui/
-│               ├── navigation/EventiaNavGraph.kt   # Rutas + barra inferior (4 pestañas)
-│               ├── screens/                        # EventsScreen, EventDetailScreen,
-│               │                                    # VenuesScreen, VenueDetailScreen,
+│               ├── navigation/EventiaNavGraph.kt   # Rutas + barra inferior (4 destinos)
+│               ├── screens/                        # ExploreScreen (segmentos Eventos|Lugares),
+│               │                                    # EventsContent, VenuesContent,
+│               │                                    # EventDetailScreen, VenueDetailScreen,
 │               │                                    # FavoritesScreen, AuthScreen,
 │               │                                    # ProfileScreen, MapScreen
 │               ├── components/                     # EventCard, VenueCard
+│               ├── util/                           # GeoDirections.kt (intent geo:, RF-09)
 │               ├── viewmodel/                      # Events, EventDetail, Venues, VenueDetail,
 │               │                                   # Favorites, Auth, Profile, Map
 │               └── theme/                          # Color, Type, Theme (Material 3)
@@ -116,7 +119,7 @@ Prueva_evidia/
 ### 4.1 Catálogo con Internet (RF-01, RF-03, RF-06)
 
 ```
-EventsScreen
+ExploreScreen → EventsContent (segmento "Eventos")
    │  (búsqueda con debounce 300 ms + filtro por categoría combinables,
    │   botón "Actualizar", posición con rememberSaveable)
    ▼
@@ -153,7 +156,7 @@ Si Room también está vacío → estado de error/vacío con botón "Reintentar"
 ### 4.3 Lugares (RF-13)
 
 ```
-VenuesScreen ──► VenuesViewModel ──► VenuesRepository ──► VenuesRepositoryImpl
+ExploreScreen → VenuesContent (segmento "Lugares") ──► VenuesViewModel ──► VenuesRepository ──► VenuesRepositoryImpl
                                                                 │
                                           GET /venues ─────────┤
                                           Room (venues) ◄──────┘ (caché + fallback offline)
@@ -225,10 +228,11 @@ MapViewModel ── combine(observeEvents(), observeCategories(), filtro)
    │             │  lat ∈ [-90,90], lng ∈ [-180,180], no (0,0)
    ▼
 GoogleMap (maps-compose) ── Marker(solo eventos válidos)
-   │ tap marcador ──► EventSummaryCard (título, fecha, lugar, categoría)  ── RF-09
+   │ tap marcador ──► EventSummaryCard (título, fecha, lugar, categoría)  ── RF-08
    │                     ├── [Ver detalle]  ──► event_detail/{id}
-   │                     └── [Indicaciones] ──► Intent geo:lat,lng  (app externa)  ── RF-61
-   │                            └─ sin app compatible ──► SnackBar de aviso       ── RF-62
+   │                     └── [Indicaciones] ──► Intent geo:lat,lng  (app externa)  ── RF-09
+   │                            └─ sin app compatible ──► SnackBar de aviso       ── RF-09
+   │  (el mismo botón "Indicaciones" existe en el detalle del evento y del lugar)
    └── datos desde Room → funciona sin Internet
 
 Sin marcadores: "No hay eventos cargados" o "Ningún evento tiene coordenadas válidas"
@@ -238,13 +242,14 @@ Ubicación actual y eventos cercanos: opcionales (no implementados, sin permisos
 ### 4.7 Navegación (Navigation Compose)
 
 ```
-bottomBar:  [ 🏠 Eventos ] [ 📍 Lugares ] [ 🗺 Mapa ] [ 🤍 Favoritos ] [ 👤 Perfil ]
+bottomBar (cuatro destinos, sección 5 del enunciado):
+  [ 🏠 Explorar ] [ 🗺 Mapa ] [ 🤍 Favoritos ] [ 👤 Perfil ]
 
-events ──tap evento──► event_detail/{eventId} ──"Ver lugar →"──► venue_detail/{venueId}
-   ▲                        │                                        │
-   └──── back ◄─────────────┘◄──── tap evento (EventCard) ◄──────────┘
+Explorar (ExploreScreen) ── segmentos [Eventos | Lugares] (Figura 1)
+   ├── EventsContent ──tap evento──► event_detail/{eventId} ──"Ver lugar →"──► venue_detail/{venueId}
+   └── VenuesContent ──tap lugar──► venue_detail/{venueId} ──tap evento (EventCard)──► event_detail
 
-favorites ──tap evento──► event_detail/{eventId}   (corazón para quitar/agregar)
+favoritos ──tap evento──► event_detail/{eventId}   (corazón para quitar/agregar)
 profile ──"Iniciar sesión"──► auth ──éxito──► popBackStack()  (perfil o evento de origen)
 event_detail (sin sesión) ──"Inscribirme"──► auth ──éxito──► regresa al mismo evento
 ```
@@ -255,7 +260,7 @@ event_detail (sin sesión) ──"Inscribirme"──► auth ──éxito──�
 
 | Método | Endpoint | Uso | Estado |
 |---|---|---|---|
-| GET | `/events` | Listado con `search`/`category`/`upcoming` (RF-01/RF-03) | ✅ usado |
+| GET | `/events` | Listado con `q` (búsqueda) y `category` (RF-01/RF-03) | ✅ usado |
 | GET | `/events/{id}` | Detalle con cupos (RF-02) | ✅ usado |
 | GET | `/categories` | Filtro por categoría | ✅ usado |
 | GET | `/venues` | Lista de lugares (RF-13) | ✅ usado |
@@ -266,17 +271,43 @@ event_detail (sin sesión) ──"Inscribirme"──► auth ──éxito──�
 | GET | `/me/attendances` | Inscripciones próximas/pasadas (RF-12) | ✅ usado |
 | POST/DELETE | `/events/{id}/attendance` | Inscribirse/cancelar con confirmación del servidor | ✅ usado |
 
-Base URL configurada en `app/build.gradle.kts` → `BuildConfig.BASE_URL = "http://localhost:8000/api/"`.
+Base URL: **`RetrofitRepository.BASE_URL = "http://10.0.2.2:8000/api/"`** (modo emulador)
+(única fuente de verdad, en `data/remote/RetrofitRepository.kt`; `NetworkModule` inyecta `RetrofitRepository.api` a toda la app — un solo Retrofit y un solo OkHttp en todo el proyecto).
 
-> **Importante sobre `localhost`:**
-> - **Emulador:** `localhost` es el propio emulador; se debe usar `http://10.0.2.2:8000/api/`.
-> - **Dispositivo físico:** la IP de la PC en la red local, p. ej. `http://192.168.x.x:8000/api/`.
+> **Cómo conectar el backend según el dispositivo:**
+> - **Emulador Android Studio (configuración actual):** `http://10.0.2.2:8000/api/`
+>   (en el emulador, `localhost` es el propio emulador; `10.0.2.2` apunta a la PC).
+> - **Celular físico por USB:** cambiar a `http://localhost:8000/api/` y ejecutar
+>   `adb reverse tcp:8000 tcp:8000` (el `localhost` del celular se redirige a tu PC).
+> - **Servidor en la nube:** la URL pública terminada en `/api/`.
 > - `AndroidManifest.xml` incluye `usesCleartextTraffic="true"` porque la API es HTTP en desarrollo.
-> - La URL no se ha cambiado de la indicada (`http://localhost:8000/api/`) para respetar el dato entregado.
+> - **Requisito:** el backend debe estar corriendo en el puerto 8000 de la PC
+>   (sin servidor levantado, la app muestra los datos cacheados en Room).
 
 ---
 
 ## 6. Cómo compilar y probar
+
+**Versiones del proyecto** (obligatorio documentar, sección 10 del enunciado):
+
+| Componente | Versión |
+|---|---|
+| Android Gradle Plugin | 8.7.3 |
+| Kotlin | 2.0.21 (KSP 2.0.21-1.0.28) |
+| Gradle (wrapper) | 8.11.1 |
+| JDK | 17 |
+| compileSdk / targetSdk / minSdk | 35 / 35 / 24 |
+| Jetpack Compose BOM | 2024.12.01 (Material 3) |
+| Navigation Compose | 2.8.5 |
+| Hilt | 2.52 (+ hilt-navigation-compose 1.2.0) |
+| Retrofit + Gson | 2.11.0 (converter-gson) |
+| OkHttp | 4.12.0 (+ logging-interceptor) |
+| Room | 2.6.1 |
+| DataStore Preferences | 1.1.1 |
+| Coroutines | 1.9.0 |
+| Coil | 2.7.0 |
+| Maps Compose / Play Services Maps | 4.3.3 / 19.0.0 |
+| Android Studio | última estable instalada (SDK 35 + Build-Tools 35.x) |
 
 **Requisitos:** Android Studio (con SDK 35 y Build-Tools 35.x), JDK 17, backend de la asignatura corriendo.
 
@@ -294,10 +325,11 @@ cd C:\Users\Usuario\Desktop\moviles2026\PRueva\Prueva_evidia
 5. Abrir un detalle y volver → se conservan búsqueda, categoría y posición de scroll.
 
 **Pruebas manuales — Módulo B (Lugares):**
-1. Pestaña *Lugares* → lista con nombre, dirección, horario y descripción.
-2. Abrir un lugar → muestra sus datos y **próximos eventos** (con `EventCard`).
+1. Explorar → segmento *Lugares* → lista con nombre, dirección, imagen y número de eventos próximos (RF-13).
+2. Abrir un lugar → muestra descripción, horario, botón **Indicaciones** y **próximos eventos** (con `EventCard`).
 3. Tocar un evento → detalle del evento; desde el detalle, *Ver lugar →* regresa al lugar.
 4. Rotar el dispositivo → `SavedStateHandle`/`rememberSaveable` conservan el estado.
+5. Cambiar de segmento (Eventos ↔ Lugares) → cada lista **conserva su posición de scroll**.
 
 **Pruebas manuales — Módulo C (Favoritos y offline):**
 1. Abrir un evento → tocar el **corazón** → "Agregado a favoritos" (funciona en modo avión).
@@ -321,20 +353,23 @@ cd C:\Users\Usuario\Desktop\moviles2026\PRueva\Prueva_evidia
 10. Reiniciar la app con token → la sesión se **restaura** automáticamente (DataStore).
 
 **Pruebas manuales — Módulo E (Mapa):**
-1. Pestaña *Mapa* → se muestran marcadores **solo** de eventos con coordenadas válidas (la API puede devolver eventos sin ubicación → no aparecen).
-2. Cambiar la categoría en los chips → el mapa se actualiza y la selección se limpia (filtro combinable).
-3. Tocar un marcador → aparece el **resumen** del evento (título, fecha, lugar, categoría).
-4. **Ver detalle** → abre `event_detail` del evento seleccionado; *volver* regresa al mapa (filtro conservado por `SavedStateHandle`).
-5. **Indicaciones** → se abre Google Maps (u otra app de mapas) con la ruta al lugar.
-6. Desinstar/deshabilitar apps de mapas → **Indicaciones** muestra SnackBar *“No se encontró una aplicación de mapas…”*.
-7. Modo avión → el mapa sigue mostrando marcadores desde Room (teselas de fondo requieren conexión/key).
-8. Catálogo vacío → estado *“No hay eventos cargados. Actualiza el catálogo.”*
+1. Explorar → segmento *Eventos* / *Lugares* → los cuatro destinos de la barra inferior funcionan (Explorar, Mapa, Favoritos, Perfil).
+2. Pestaña *Mapa* → se muestran marcadores **solo** de eventos con coordenadas válidas (la API puede devolver eventos sin ubicación → no aparecen).
+3. Cambiar la categoría en los chips → el mapa se actualiza y la selección se limpia (filtro combinable).
+4. Tocar un marcador → aparece el **resumen** del evento (título, fecha, lugar, categoría).
+5. **Ver detalle** → abre `event_detail` del evento seleccionado; *volver* regresa al mapa (filtro conservado por `SavedStateHandle`).
+6. **Indicaciones** desde el resumen del mapa, desde el **detalle del evento** y desde el **detalle del lugar** → se abre Google Maps (u otra app de mapas) con la ruta al lugar (RF-09).
+7. Desinstar/deshabilitar apps de mapas → **Indicaciones** muestra SnackBar *“No se encontró una aplicación de mapas…”* sin cerrar la app.
+8. Modo avión → el mapa sigue mostrando marcadores desde Room (teselas de fondo requieren conexión/key).
+9. Catálogo vacío → estado *“No hay eventos cargados. Actualiza el catálogo.”*
+10. Evento inexistente (404) → *“Este evento ya no está disponible”* con opción de volver.
+11. Rotar el dispositivo en cualquier pantalla → el estado se conserva.
 
 ---
 
 ## 7. Limitaciones y pendientes
 
-1. **DTOs provisionales**: los campos de `EventDto`/`VenueDto`/`AttendanceDto`/`ServerErrorDto` fueron inferidos del documento; se ajustarán a los JSON reales de la API (no hay ejemplos de respuesta aún). Si un campo real difiere, el mapeo en `data/mapper/` es el único lugar a corregir.
+1. **Contrato de API verificado**: los DTOs (`EventDto`, `VenueDto`, `ServerErrorDto`) y la interfaz `EventiaApi` se alinearon a la colección Postman *"Eventia API"* (fecha en `startsAt`, parámetros `q`/`category`, errores `{code, message, fields}`, `GET /me/attendances` devuelve eventos). Si el backend real difiere, el mapeo en `data/mapper/` es el único lugar a corregir.
 2. **API key de Google Maps pendiente**: `MapScreen` está implementado, pero el manifest tiene el placeholder `YOUR_GOOGLE_MAPS_API_KEY`; sin la key real los marcadores y el resumen funcionan, pero **no se dibujan las teselas** del mapa. Reemplazarla en `AndroidManifest.xml` (`com.google.android.geo.API_KEY`).
 3. **Clasificación próximas/pasadas**: usa `SimpleDateFormat` con varios patrones sobre la fecha local; si la API usa un formato no contemplado, las inscripciones se mostrarán como "próximas" (ajustar `ProfileViewModel.parseDateMillis`).
 4. `AuthInterceptor` usa `runBlocking` para leer el token (limitación conocida: bloquea el hilo de OkHttp, no la UI).
