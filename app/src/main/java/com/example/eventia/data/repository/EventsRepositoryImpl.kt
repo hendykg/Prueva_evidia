@@ -5,7 +5,9 @@ import com.example.eventia.data.local.EventiaDatabase
 import com.example.eventia.data.local.dao.EventDao
 import com.example.eventia.data.mapper.toDomain
 import com.example.eventia.data.mapper.toEntity
+import com.example.eventia.data.remote.ApiException
 import com.example.eventia.data.remote.EventiaApi
+import com.example.eventia.data.remote.serverErrorMessage
 import com.example.eventia.domain.model.Category
 import com.example.eventia.domain.model.Event
 import com.example.eventia.domain.repository.EventsRepository
@@ -31,7 +33,7 @@ class EventsRepositoryImpl @Inject constructor(
 
     override suspend fun refreshEvents(query: String?, categoryId: String?): Result<Unit> {
         return try {
-            val response = api.getEvents(search = query, categoryId = categoryId, upcoming = true)
+            val response = api.getEvents(query = query, categoryId = categoryId)
             if (response.isSuccessful) {
                 val body = response.body().orEmpty()
                 val entities = body.mapNotNull { dto ->
@@ -80,10 +82,16 @@ class EventsRepositoryImpl @Inject constructor(
             if (response.isSuccessful) {
                 val dto = response.body() ?: return Result.failure(Exception("Evento no encontrado"))
                 Result.success(dto.toDomain())
+            } else if (response.code() == 404) {
+                // API 8.3: 404 → "Este evento ya no está disponible"
+                Result.failure(ApiException(404, "Este evento ya no está disponible"))
             } else {
+                // Sin conexión u otro error: se usa la caché de Room si existe
                 val local = eventDao.getEventById(id)
                 if (local != null) Result.success(local.toDomain())
-                else Result.failure(Exception("HTTP ${response.code()}"))
+                else Result.failure(
+                    ApiException(response.code(), response.serverErrorMessage("No se pudo cargar el evento"))
+                )
             }
         } catch (e: Exception) {
             val local = eventDao.getEventById(id)

@@ -17,7 +17,7 @@ import com.example.eventia.data.local.entities.VenueEntity
         FavoriteEntity::class,
         VenueEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class EventiaDatabase : RoomDatabase() {

@@ -100,7 +100,6 @@ class ProfileViewModel @Inject constructor(
     }
 
     private fun isPast(attendance: Attendance, now: Long): Boolean {
-        if (attendance.status.equals("past", ignoreCase = true)) return true
         val raw = attendance.event?.date ?: return false
         val millis = parseDateMillis(raw) ?: return false
         return millis < now

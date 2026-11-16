@@ -1,7 +1,7 @@
 package com.example.eventia.data.repository
 
 import com.example.eventia.data.datastore.SessionDataStore
-import com.example.eventia.data.mapper.toDomain
+import com.example.eventia.data.mapper.toAttendance
 import com.example.eventia.data.remote.ApiException
 import com.example.eventia.data.remote.EventiaApi
 import com.example.eventia.data.remote.serverErrorMessage
@@ -80,7 +80,7 @@ class AttendanceRepositoryImpl @Inject constructor(
         return try {
             val response = api.myAttendances()
             if (response.isSuccessful) {
-                val attendances = response.body().orEmpty().map { it.toDomain() }
+                val attendances = response.body().orEmpty().map { it.toAttendance() }
                 myEventIds.value = attendances.map { it.eventId }.toSet()
                 Result.success(attendances)
             } else {

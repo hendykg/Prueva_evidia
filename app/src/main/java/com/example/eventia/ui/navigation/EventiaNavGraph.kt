@@ -6,7 +6,6 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -24,16 +23,14 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.eventia.ui.screens.AuthScreen
 import com.example.eventia.ui.screens.EventDetailScreen
-import com.example.eventia.ui.screens.EventsScreen
+import com.example.eventia.ui.screens.ExploreScreen
 import com.example.eventia.ui.screens.FavoritesScreen
 import com.example.eventia.ui.screens.MapScreen
 import com.example.eventia.ui.screens.ProfileScreen
 import com.example.eventia.ui.screens.VenueDetailScreen
-import com.example.eventia.ui.screens.VenuesScreen
 
 object Routes {
-    const val EVENTS = "events"
-    const val VENUES = "venues"
+    const val EXPLORE = "explore"
     const val FAVORITES = "favorites"
     const val PROFILE = "profile"
     const val MAP = "map"
@@ -50,9 +47,10 @@ private data class BottomItem(
     val icon: ImageVector
 )
 
+// Sección 5 del enunciado: barra inferior de cuatro destinos
+// (Explorar, Mapa, Favoritos y Perfil); Explorar agrupa Eventos y Lugares.
 private val bottomItems = listOf(
-    BottomItem(Routes.EVENTS, "Eventos", Icons.Filled.Home),
-    BottomItem(Routes.VENUES, "Lugares", Icons.Filled.Place),
+    BottomItem(Routes.EXPLORE, "Explorar", Icons.Filled.Home),
     BottomItem(Routes.MAP, "Mapa", Icons.Filled.LocationOn),
     BottomItem(Routes.FAVORITES, "Favoritos", Icons.Filled.Favorite),
     BottomItem(Routes.PROFILE, "Perfil", Icons.Filled.Person)
@@ -74,7 +72,7 @@ fun EventiaNavGraph() {
                             selected = currentRoute == item.route,
                             onClick = {
                                 navController.navigate(item.route) {
-                                    popUpTo(Routes.EVENTS) { saveState = true }
+                                    popUpTo(Routes.EXPLORE) { saveState = true }
                                     launchSingleTop = true
                                     restoreState = true
                                 }
@@ -89,18 +87,14 @@ fun EventiaNavGraph() {
     ) { padding ->
         NavHost(
             navController = navController,
-            startDestination = Routes.EVENTS,
+            startDestination = Routes.EXPLORE,
             modifier = Modifier.padding(padding)
         ) {
-            composable(Routes.EVENTS) {
-                EventsScreen(
+            composable(Routes.EXPLORE) {
+                ExploreScreen(
                     onEventClick = { eventId ->
                         navController.navigate("${Routes.EVENT_DETAIL}/$eventId")
-                    }
-                )
-            }
-            composable(Routes.VENUES) {
-                VenuesScreen(
+                    },
                     onVenueClick = { venueId ->
                         navController.navigate("${Routes.VENUE_DETAIL}/$venueId")
                     }
@@ -146,7 +140,7 @@ fun EventiaNavGraph() {
                     onVenueClick = { venueId ->
                         navController.navigate("${Routes.VENUE_DETAIL}/$venueId")
                     },
-                    // RF-55: login y regreso al evento seleccionado
+                    // RF-12: login y regreso al evento seleccionado
                     onRequireLogin = { navController.navigate(Routes.AUTH) }
                 )
             }

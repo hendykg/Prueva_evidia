@@ -4,7 +4,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- RF-61: permite detectar apps externas de mapas para indicaciones -->
+    <!-- RF-09: permite detectar apps externas de mapas para indicaciones -->
     <queries>
         <intent>
             <action android:name="android.intent.action.VIEW" />

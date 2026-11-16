@@ -9,9 +9,11 @@ fun VenueDto.toDomain(): Venue = Venue(
     name = name.orEmpty(),
     address = address,
     description = description,
-    schedule = schedule,
-    latitude = latitude,
-    longitude = longitude
+    schedule = openingHours ?: schedule,
+    latitude = lat,
+    longitude = lng,
+    imageUrl = imageUrl,
+    upcomingEventsCount = upcomingEventsCount
 )
 
 fun VenueDto.toEntity(): VenueEntity = toDomain().toEntity()
@@ -23,7 +25,9 @@ fun Venue.toEntity(): VenueEntity = VenueEntity(
     description = description,
     schedule = schedule,
     latitude = latitude,
-    longitude = longitude
+    longitude = longitude,
+    imageUrl = imageUrl,
+    upcomingEventsCount = upcomingEventsCount
 )
 
 fun VenueEntity.toDomain(): Venue = Venue(
@@ -33,5 +37,7 @@ fun VenueEntity.toDomain(): Venue = Venue(
     description = description,
     schedule = schedule,
     latitude = latitude,
-    longitude = longitude
+    longitude = longitude,
+    imageUrl = imageUrl,
+    upcomingEventsCount = upcomingEventsCount
 )

@@ -12,17 +12,19 @@ fun EventDto.toDomain(): Event = Event(
     title = title.orEmpty(),
     summary = summary,
     description = description,
-    date = date ?: startDate,
-    categoryId = category?.id ?: categoryId,
+    // La API envía la fecha en `startsAt` y categoría/lugar como objetos anidados
+    date = startsAt,
+    categoryId = category?.id,
     categoryName = category?.name,
-    venueId = venue?.id ?: venueId,
+    venueId = venue?.id,
     venueName = venue?.name,
-    place = place ?: venue?.address ?: venue?.name,
+    place = venue?.address ?: venue?.name,
     imageUrl = imageUrl,
-    capacity = capacity ?: cups,
-    availableSpots = availableSpots ?: cups,
-    latitude = latitude ?: venue?.latitude,
-    longitude = longitude ?: venue?.longitude
+    capacity = capacity,
+    availableSpots = availableSpots,
+    // RF-07: las coordenadas pueden venir en el evento o en su lugar (venue.lat/lng)
+    latitude = lat ?: venue?.lat,
+    longitude = lng ?: venue?.lng
 )
 
 fun EventDto.toEntity(): EventEntity = toDomain().toEntity()

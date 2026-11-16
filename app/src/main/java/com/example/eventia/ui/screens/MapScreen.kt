@@ -1,7 +1,5 @@
 package com.example.eventia.ui.screens
 
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,6 +38,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.eventia.domain.model.Event
+import com.example.eventia.ui.util.NO_MAPS_APP_MESSAGE
+import com.example.eventia.ui.util.openDirections
 import com.example.eventia.ui.viewmodel.MapViewModel
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
@@ -152,19 +152,23 @@ fun MapScreen(
                         event = event,
                         onOpenDetail = { onEventClick(event.id) },
                         onDirections = {
-                            openDirections(
-                                context = context,
-                                event = event,
-                                onNoApp = {
-                                    // RF-62: ausencia de app de mapas compatible
-                                    coroutineScope.launch {
-                                        snackbarHostState.currentSnackbarData?.dismiss()
-                                        snackbarHostState.showSnackbar(
-                                            "No se encontró una aplicación de mapas para mostrar indicaciones."
-                                        )
+                            val lat = event.latitude
+                            val lng = event.longitude
+                            if (lat != null && lng != null) {
+                                openDirections(
+                                    context = context,
+                                    latitude = lat,
+                                    longitude = lng,
+                                    label = event.title,
+                                    onNoApp = {
+                                        // RF-09: ausencia de app de mapas compatible
+                                        coroutineScope.launch {
+                                            snackbarHostState.currentSnackbarData?.dismiss()
+                                            snackbarHostState.showSnackbar(NO_MAPS_APP_MESSAGE)
+                                        }
                                     }
-                                }
-                            )
+                                )
+                            }
                         },
                         onDismiss = viewModel::clearSelection,
                         modifier = Modifier
@@ -211,22 +215,5 @@ private fun EventSummaryCard(
                 TextButton(onClick = onDirections) { Text("Indicaciones") }
             }
         }
-    }
-}
-
-/**
- * RF-61/RF-62: abre indicaciones en una app externa (geo: lat,lng).
- * Si ninguna app puede manejar el intent, se avisa al usuario.
- */
-private fun openDirections(context: android.content.Context, event: Event, onNoApp: () -> Unit) {
-    val lat = event.latitude ?: return
-    val lng = event.longitude ?: return
-    val label = Uri.encode(event.title)
-    val uri = Uri.parse("geo:$lat,$lng?q=$lat,$lng,$label")
-    val intent = Intent(Intent.ACTION_VIEW, uri)
-    if (intent.resolveActivity(context.packageManager) != null) {
-        context.startActivity(intent)
-    } else {
-        onNoApp()
     }
 }

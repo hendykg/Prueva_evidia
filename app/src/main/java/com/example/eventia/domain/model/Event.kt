@@ -30,7 +30,9 @@ data class Venue(
     val description: String?,
     val schedule: String?,
     val latitude: Double?,
-    val longitude: Double?
+    val longitude: Double?,
+    val imageUrl: String?,
+    val upcomingEventsCount: Int?
 )
 
 data class User(
