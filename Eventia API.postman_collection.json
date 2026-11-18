@@ -1,0 +1,1231 @@
+{
+  "info": {
+    "_postman_id": "41688ca9-a98c-451a-adbf-66aa7b2c36e4",
+    "name": "Eventia API",
+    "description": "API del proyecto final Eventia (Programación de Aplicaciones Móviles 1).\n\n1. Si la API no corre en `http://localhost:8000`, cambia la variable de colección `baseUrl`.\n2. Levanta la API (`php artisan serve`) con los datos de prueba (`php artisan migrate:fresh --seed`).\n3. Ejecuta la colección completa con el *Collection Runner* de Postman, en orden: cada carpeta guarda en variables el token y los ids que usan las siguientes.\n\nLas peticiones con sesión usan `Authorization: Bearer {{token}}`, configurado a nivel de colección.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "6777473"
+  },
+  "item": [
+    {
+      "name": "1. Autenticación",
+      "item": [
+        {
+          "name": "Registrar cuenta",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('registerEmail', `alumno_${Date.now()}@eventia.test`);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 201', () => pm.response.to.have.status(201));\nconst json = pm.response.json();\npm.test('Devuelve token y usuario', () => { pm.expect(json.token).to.be.a('string'); pm.expect(json.user.email).to.eql(pm.collectionVariables.get('registerEmail')); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Alumno de prueba\",\n  \"email\": \"test@test.com\",\n  \"password\": \"test!123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Crea una cuenta nueva con un correo aleatorio. Devuelve `token` y `user` (201)."
+          },
+          "response": []
+        },
+        {
+          "name": "Iniciar sesión",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));\nconst json = pm.response.json();\npm.test('Devuelve token', () => pm.expect(json.token).to.be.a('string'));\npm.collectionVariables.set('token', json.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test@test.com\",\n  \"password\": \"test!123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Inicia sesión con la cuenta de prueba (`ana@eventia.test` / `eventia123`; cámbialas en el cuerpo si quieres usar otra) y guarda el token en la variable `token`."
+          },
+          "response": []
+        },
+        {
+          "name": "Usuario autenticado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Es la cuenta de prueba', () => pm.expect(pm.response.json().email).to.eql('ana@eventia.test'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "me"
+              ]
+            },
+            "description": "Datos del usuario dueño del token."
+          },
+          "response": []
+        }
+      ],
+      "description": "Registro, inicio de sesión y usuario autenticado. **Iniciar sesión** guarda el token en la variable `token`, que usa el resto de la colección."
+    },
+    {
+      "name": "2. Catálogo",
+      "item": [
+        {
+          "name": "Categorías",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Es un arreglo con categorías', () => pm.expect(json).to.be.an('array').that.is.not.empty);",
+                  "pm.collectionVariables.set('categoryId', json[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/categories",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "categories"
+              ]
+            },
+            "description": "Lista de categorías. Guarda la primera en `categoryId`."
+          },
+          "response": []
+        },
+        {
+          "name": "Eventos (catálogo completo)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Solo eventos próximos', () => json.forEach(e => pm.expect(new Date(e.startsAt) >= new Date()).to.be.true));",
+                  "pm.test('Incluye los campos del documento', () => ['id','title','summary','startsAt','category','imageUrl','venue','capacity','availableSpots'].forEach(k => pm.expect(json[0]).to.have.property(k)));",
+                  "const open = json.find(e => e.availableSpots > 0 && !e.isAttending);",
+                  "const full = json.find(e => e.availableSpots === 0);",
+                  "if (open) { pm.collectionVariables.set('eventId', open.id); }",
+                  "if (full) { pm.collectionVariables.set('fullEventId', full.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "events"
+              ]
+            },
+            "description": "Catálogo de eventos próximos. Con token cada evento incluye `isAttending`. Guarda en `eventId` un evento con cupos en el que el usuario no esté inscrito y en `fullEventId` uno sin cupos."
+          },
+          "response": []
+        },
+        {
+          "name": "Eventos: buscar por nombre",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Todos contienen el texto', () => pm.response.json().forEach(e => pm.expect(e.title.toLowerCase()).to.include('jazz')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events?q=jazz",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "events"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "jazz",
+                  "description": "Texto a buscar en el nombre del evento"
+                }
+              ]
+            },
+            "description": "Búsqueda por nombre del evento (`q`)."
+          },
+          "response": []
+        },
+        {
+          "name": "Eventos: filtrar por categoría",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));\npm.test('Todos son de la categoría', () => pm.response.json().forEach(e => pm.expect(e.category.id).to.eql(Number(pm.collectionVariables.get('categoryId')))));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events?category=2",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "events"
+              ],
+              "query": [
+                {
+                  "key": "category",
+                  "value": "2",
+                  "description": "Id de la categoría"
+                }
+              ]
+            },
+            "description": "Filtro por id de categoría."
+          },
+          "response": []
+        },
+        {
+          "name": "Eventos: búsqueda + categoría",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));\npm.test('Es un arreglo', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events?q=taller&category=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "events"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "taller",
+                  "description": "Texto a buscar"
+                },
+                {
+                  "key": "category",
+                  "value": "1",
+                  "description": "Id de la categoría"
+                }
+              ]
+            },
+            "description": "Búsqueda y categoría combinadas."
+          },
+          "response": []
+        },
+        {
+          "name": "Detalle de evento",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));\npm.test('Incluye isAttending con token', () => pm.expect(pm.response.json()).to.have.property('isAttending'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/2",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "events",
+                "2"
+              ]
+            },
+            "description": "Detalle de un evento. Con token incluye `isAttending`."
+          },
+          "response": []
+        },
+        {
+          "name": "Detalle de evento (sin token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));\npm.test('No incluye isAttending', () => pm.expect(pm.response.json()).to.not.have.property('isAttending'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "events",
+                "1"
+              ]
+            },
+            "description": "Sin token el detalle no incluye `isAttending`."
+          },
+          "response": []
+        }
+      ],
+      "description": "Categorías y eventos. Las peticiones guardan ids en variables para usarlos en las siguientes."
+    },
+    {
+      "name": "3. Lugares",
+      "item": [
+        {
+          "name": "Lugares",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "pm.test('Incluye upcomingEventsCount', () => pm.expect(json[0]).to.have.property('upcomingEventsCount'));",
+                  "pm.collectionVariables.set('venueId', json[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/venues",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "venues"
+              ]
+            },
+            "description": "Lista de lugares con `upcomingEventsCount`. Guarda el primero en `venueId`."
+          },
+          "response": []
+        },
+        {
+          "name": "Detalle de lugar",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/venues/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "venues",
+                "1"
+              ]
+            },
+            "description": "Detalle de un lugar."
+          },
+          "response": []
+        },
+        {
+          "name": "Eventos del lugar",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Todos son del lugar', () => pm.response.json().forEach(e => pm.expect(e.venue.id).to.eql(Number(pm.collectionVariables.get('venueId')))));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/venues/{{venueId}}/events",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "venues",
+                "{{venueId}}",
+                "events"
+              ]
+            },
+            "description": "Próximos eventos del lugar."
+          },
+          "response": []
+        }
+      ],
+      "description": "Lugares y sus próximos eventos."
+    },
+    {
+      "name": "4. Inscripciones",
+      "item": [
+        {
+          "name": "Inscribirse",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 201', () => pm.response.to.have.status(201));\nconst json = pm.response.json();\npm.test('Queda inscrito', () => pm.expect(json.isAttending).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/1/attendance",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "events",
+                "1",
+                "attendance"
+              ]
+            },
+            "description": "Inscribe al usuario. Devuelve el evento actualizado (201)."
+          },
+          "response": []
+        },
+        {
+          "name": "Mis inscripciones",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Incluye el evento inscrito', () => pm.expect(pm.response.json().map(e => e.id)).to.include(Number(pm.collectionVariables.get('eventId'))));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/me/attendances",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "me",
+                "attendances"
+              ]
+            },
+            "description": "Eventos en los que el usuario está inscrito, pasados y próximos."
+          },
+          "response": []
+        },
+        {
+          "name": "Cancelar inscripción",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));\npm.test('Ya no está inscrito', () => pm.expect(pm.response.json().isAttending).to.be.false);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/1/attendance",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "events",
+                "1",
+                "attendance"
+              ]
+            },
+            "description": "Cancela la inscripción y devuelve el evento actualizado."
+          },
+          "response": []
+        },
+        {
+          "name": "Inscribirse a evento sin cupos (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Código de error EVENT_FULL', () => pm.expect(pm.response.json().code).to.eql('EVENT_FULL'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/{{fullEventId}}/attendance",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "events",
+                "{{fullEventId}}",
+                "attendance"
+              ]
+            },
+            "description": "Evento lleno: responde 409 `EVENT_FULL`."
+          },
+          "response": []
+        }
+      ],
+      "description": "Requieren token. Ejecuta antes **Iniciar sesión** y **Eventos (catálogo completo)**."
+    },
+    {
+      "name": "5. Casos de error",
+      "item": [
+        {
+          "name": "Sin token (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Código de error UNAUTHENTICATED', () => pm.expect(pm.response.json().code).to.eql('UNAUTHENTICATED'));",
+                  "pm.test('Incluye fields', () => pm.expect(pm.response.json()).to.have.property('fields'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "me"
+              ]
+            },
+            "description": "Ruta con sesión sin token."
+          },
+          "response": []
+        },
+        {
+          "name": "Token inválido (401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Código de error UNAUTHENTICATED', () => pm.expect(pm.response.json().code).to.eql('UNAUTHENTICATED'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "token-invalido",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "me"
+              ]
+            },
+            "description": "Token que no existe."
+          },
+          "response": []
+        },
+        {
+          "name": "Evento inexistente (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Código de error NOT_FOUND', () => pm.expect(pm.response.json().code).to.eql('NOT_FOUND'));",
+                  "pm.test('Incluye fields', () => pm.expect(pm.response.json()).to.have.property('fields'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events/999999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "events",
+                "999999"
+              ]
+            },
+            "description": "Id que no existe."
+          },
+          "response": []
+        },
+        {
+          "name": "Lugar inexistente (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Código de error NOT_FOUND', () => pm.expect(pm.response.json().code).to.eql('NOT_FOUND'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/venues/999999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "venues",
+                "999999"
+              ]
+            },
+            "description": "Id que no existe."
+          },
+          "response": []
+        },
+        {
+          "name": "Registro con campos vacíos (422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('Código de error VALIDATION_ERROR', () => pm.expect(pm.response.json().code).to.eql('VALIDATION_ERROR'));",
+                  "pm.test('Error por campo', () => ['name','email','password'].forEach(k => pm.expect(pm.response.json().fields).to.have.property(k)));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\",\n  \"email\": \"\",\n  \"password\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Valores vacíos: un mensaje por campo en `fields`."
+          },
+          "response": []
+        },
+        {
+          "name": "Registro con contraseña corta (422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('Error en password', () => pm.expect(pm.response.json().fields).to.have.property('password'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ana\",\n  \"email\": \"corta@eventia.test\",\n  \"password\": \"123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Contraseña de menos de 8 caracteres."
+          },
+          "response": []
+        },
+        {
+          "name": "Registro con correo existente (422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('Error en email', () => pm.expect(pm.response.json().fields).to.have.property('email'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ana\",\n  \"email\": \"ANA@eventia.test\",\n  \"password\": \"secreto123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Correo ya registrado (sin importar mayúsculas)."
+          },
+          "response": []
+        },
+        {
+          "name": "Inicio de sesión con contraseña incorrecta (422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('Error en email', () => pm.expect(pm.response.json().fields).to.have.property('email'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"ana@eventia.test\",\n  \"password\": \"incorrecta\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Credenciales incorrectas."
+          },
+          "response": []
+        },
+        {
+          "name": "Categoría inválida (422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('Error en category', () => pm.expect(pm.response.json().fields).to.have.property('category'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/events?category=abc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "events"
+              ],
+              "query": [
+                {
+                  "key": "category",
+                  "value": "abc",
+                  "description": "Valor inválido"
+                }
+              ]
+            },
+            "description": "Categoría que no es número."
+          },
+          "response": []
+        },
+        {
+          "name": "JSON mal formado (400)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Código de error INVALID_JSON', () => pm.expect(pm.response.json().code).to.eql('INVALID_JSON'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\": ",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Cuerpo que no es JSON válido."
+          },
+          "response": []
+        }
+      ],
+      "description": "Respuestas de error con el formato `{ code, message, fields }`."
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000/api"
+    },
+    {
+      "key": "fullEventId",
+      "value": "9"
+    }
+  ]
+}
