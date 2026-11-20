@@ -300,7 +300,7 @@ Base URL: **`RetrofitRepository.BASE_URL = "https://eventia.jmacboy.dev/api/"`**
 | Kotlin | 2.0.21 (KSP 2.0.21-1.0.28) |
 | Gradle (wrapper) | 8.11.1 |
 | JDK | 17 |
-| compileSdk / targetSdk / minSdk | 35 / 35 / 24 |
+| compileSdk / targetSdk / minSdk | 35 / 35 / 21 |
 | Jetpack Compose BOM | 2024.12.01 (Material 3) |
 | Navigation Compose | 2.8.5 |
 | Hilt | 2.52 (+ hilt-navigation-compose 1.2.0) |
