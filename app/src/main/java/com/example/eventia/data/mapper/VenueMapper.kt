@@ -18,6 +18,10 @@ fun VenueDto.toDomain(): Venue = Venue(
 
 fun VenueDto.toEntity(): VenueEntity = toDomain().toEntity()
 
+/** Lista de DTO → entidades descartando los lugares sin id. */
+fun List<VenueDto>.toVenueEntities(): List<VenueEntity> =
+    mapNotNull { dto -> dto.id?.let { id -> dto.copy(id = id).toEntity() } }
+
 fun Venue.toEntity(): VenueEntity = VenueEntity(
     id = id,
     name = name,

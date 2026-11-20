@@ -54,10 +54,9 @@ class EventsViewModel @Inject constructor(
 
     private val queryFlow = savedStateHandle.getStateFlow(QUERY_KEY, "")
     private val categoryFlow = savedStateHandle.getStateFlow<String?>(CATEGORY_KEY, null)
-    private val loadingFlow = MutableStateFlow(false)
-    private val refreshingFlow = MutableStateFlow(false)
-    private val errorFlow = MutableStateFlow<String?>(null)
     private val lastSyncFlow = MutableStateFlow<Long?>(null)
+    // Estado de carga/error compartido con VenuesViewModel (RF-06)
+    private val status = ListStatus()
 
     // RF-03: debounce de 300 ms sobre la búsqueda por nombre
     private val debouncedQuery = queryFlow.debounce(300).distinctUntilChanged()
@@ -82,9 +81,9 @@ class EventsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CatalogData(emptyList(), emptyList()))
 
     private val statusData: StateFlow<StatusData> = combine(
-        loadingFlow,
-        refreshingFlow,
-        errorFlow,
+        status.isLoading,
+        status.isRefreshing,
+        status.error,
         lastSyncFlow,
         networkMonitor.isConnected
     ) { isLoading, isRefreshing, errorMessage, lastSync, isConnected ->
@@ -135,32 +134,20 @@ class EventsViewModel @Inject constructor(
     }
 
     fun consumeError() {
-        errorFlow.value = null
+        status.consumeError()
     }
 
     fun loadInitial() {
         viewModelScope.launch {
-            loadingFlow.value = true
-            val result = repository.refreshEvents()
-            loadingFlow.value = false
+            status.loadInitial { repository.refreshEvents() }
             lastSyncFlow.value = repository.getLastSyncMillis()
-            result.onFailure {
-                // RF-06: no se borra la lista si falla la actualización
-                errorFlow.value = "No se pudo actualizar. Mostrando datos disponibles."
-            }
         }
     }
 
     fun refresh() {
         viewModelScope.launch {
-            refreshingFlow.value = true
-            val result = repository.refreshEvents()
-            refreshingFlow.value = false
+            status.refresh { repository.refreshEvents() }
             lastSyncFlow.value = repository.getLastSyncMillis()
-            result.onFailure {
-                // RF-06: se conservan los datos visibles actuales
-                errorFlow.value = "No se pudo actualizar. Se conservan los datos actuales."
-            }
         }
     }
 

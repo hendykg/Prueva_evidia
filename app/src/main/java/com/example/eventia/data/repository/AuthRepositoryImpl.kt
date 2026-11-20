@@ -4,10 +4,13 @@ import com.example.eventia.data.datastore.SessionDataStore
 import com.example.eventia.data.mapper.toDomain
 import com.example.eventia.data.remote.ApiException
 import com.example.eventia.data.remote.EventiaApi
-import com.example.eventia.data.remote.serverErrorMessage
+import com.example.eventia.data.remote.apiCall
 import com.example.eventia.data.remote.dto.AuthRequestDto
+import com.example.eventia.data.remote.dto.AuthResponseDto
+import com.example.eventia.data.remote.toApiException
 import com.example.eventia.domain.model.User
 import com.example.eventia.domain.repository.AuthRepository
+import retrofit2.Response
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -23,83 +26,50 @@ class AuthRepositoryImpl @Inject constructor(
     private val sessionDataStore: SessionDataStore
 ) : AuthRepository {
 
-    override suspend fun login(email: String, password: String): Result<User> {
-        return try {
-            val response = api.login(AuthRequestDto(email = email, password = password))
-            if (response.isSuccessful) {
-                val body = response.body()
-                val token = body?.token
-                if (token.isNullOrBlank()) {
-                    return Result.failure(ApiException(response.code(), "Respuesta inválida del servidor"))
-                }
-                sessionDataStore.saveToken(token)
-                Result.success(
-                    body.user?.toDomain() ?: User(id = "", name = null, email = email)
-                )
-            } else {
-                Result.failure(
-                    ApiException(
-                        response.code(),
-                        response.serverErrorMessage("No se pudo iniciar sesión")
-                    )
-                )
-            }
-        } catch (e: Exception) {
-            Result.failure(e)
+    override suspend fun login(email: String, password: String): Result<User> = apiCall {
+        val response = api.login(AuthRequestDto(email = email, password = password))
+        if (response.isSuccessful) {
+            saveSession(response, fallbackUser = User(id = "", name = null, email = email))
+        } else {
+            Result.failure(response.toApiException("No se pudo iniciar sesión"))
         }
     }
 
-    override suspend fun register(name: String?, email: String, password: String): Result<User> {
-        return try {
-            val response = api.register(
-                AuthRequestDto(email = email, password = password, name = name)
-            )
-            if (response.isSuccessful) {
-                val body = response.body()
-                val token = body?.token
-                if (token.isNullOrBlank()) {
-                    return Result.failure(ApiException(response.code(), "Respuesta inválida del servidor"))
-                }
-                sessionDataStore.saveToken(token)
-                Result.success(
-                    body.user?.toDomain() ?: User(id = "", name = name, email = email)
-                )
-            } else {
-                Result.failure(
-                    ApiException(
-                        response.code(),
-                        response.serverErrorMessage("No se pudo registrar la cuenta")
-                    )
-                )
-            }
-        } catch (e: Exception) {
-            Result.failure(e)
+    override suspend fun register(name: String?, email: String, password: String): Result<User> = apiCall {
+        val response = api.register(AuthRequestDto(email = email, password = password, name = name))
+        if (response.isSuccessful) {
+            saveSession(response, fallbackUser = User(id = "", name = name, email = email))
+        } else {
+            Result.failure(response.toApiException("No se pudo registrar la cuenta"))
         }
+    }
+
+    /** Persiste el token de la respuesta y devuelve el usuario (o uno vacío). */
+    private suspend fun saveSession(
+        response: Response<AuthResponseDto>,
+        fallbackUser: User
+    ): Result<User> {
+        val body = response.body()
+        val token = body?.token
+        if (token.isNullOrBlank()) {
+            return Result.failure(ApiException(response.code(), "Respuesta inválida del servidor"))
+        }
+        sessionDataStore.saveToken(token)
+        return Result.success(body.user?.toDomain() ?: fallbackUser)
+    }
+
+    override suspend fun me(): Result<User> = apiCall {
+        val response = api.me()
+        // Sesión inválida o expirada: limpiar token para que la UI redirija (regla 50)
+        if (response.code() == 401) {
+            sessionDataStore.clearToken()
+        }
+        response.body()?.toDomain()?.let { Result.success(it) }
+            ?: Result.failure(response.toApiException("No se pudo obtener el perfil"))
     }
 
     override suspend fun logout() {
         sessionDataStore.clearToken()
-    }
-
-    override suspend fun me(): Result<User> {
-        return try {
-            val response = api.me()
-            if (response.isSuccessful) {
-                val user = response.body()
-                if (user != null) Result.success(user.toDomain())
-                else Result.failure(ApiException(response.code(), "No se pudo obtener el perfil"))
-            } else {
-                if (response.code() == 401) {
-                    // Sesión inválida o expirada: limpiar token (regla 50)
-                    sessionDataStore.clearToken()
-                }
-                Result.failure(
-                    ApiException(response.code(), response.serverErrorMessage("No se pudo obtener el perfil"))
-                )
-            }
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
     }
 
     override suspend fun isLoggedIn(): Boolean =

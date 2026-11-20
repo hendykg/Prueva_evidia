@@ -1,20 +1,29 @@
 package com.example.eventia.data.repository
 
+import androidx.room.withTransaction
 import com.example.eventia.data.local.EventiaDatabase
 import com.example.eventia.data.local.dao.EventDao
 import com.example.eventia.data.local.dao.VenueDao
 import com.example.eventia.data.mapper.toDomain
+import com.example.eventia.data.mapper.toEventEntities
 import com.example.eventia.data.mapper.toEntity
+import com.example.eventia.data.mapper.toVenueEntities
 import com.example.eventia.data.remote.EventiaApi
+import com.example.eventia.data.remote.apiCall
+import com.example.eventia.data.remote.remoteOrCache
+import com.example.eventia.data.remote.toApiException
 import com.example.eventia.domain.model.Event
 import com.example.eventia.domain.model.Venue
 import com.example.eventia.domain.repository.VenuesRepository
-import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * Lugares (RF-13): lista y detalle con caché en Room para funcionar
+ * sin conexión, igual que el catálogo de eventos.
+ */
 @Singleton
 class VenuesRepositoryImpl @Inject constructor(
     private val api: EventiaApi,
@@ -26,74 +35,49 @@ class VenuesRepositoryImpl @Inject constructor(
     override fun observeVenues(): Flow<List<Venue>> =
         venueDao.observeVenues().map { list -> list.map { it.toDomain() } }
 
-    override suspend fun refreshVenues(): Result<Unit> {
-        return try {
-            val response = api.getVenues()
-            if (response.isSuccessful) {
-                val entities = response.body().orEmpty().mapNotNull { dto ->
-                    val id = dto.id ?: return@mapNotNull null
-                    dto.copy(id = id).toEntity()
-                }
-                database.withTransaction {
-                    venueDao.clearVenues()
-                    venueDao.upsertVenues(entities)
-                }
-                Result.success(Unit)
-            } else {
-                Result.failure(Exception("HTTP ${response.code()}"))
+    override suspend fun refreshVenues(): Result<Unit> = apiCall {
+        val response = api.getVenues()
+        if (response.isSuccessful) {
+            val entities = response.body().orEmpty().toVenueEntities()
+            database.withTransaction {
+                venueDao.clearVenues()
+                venueDao.upsertVenues(entities)
             }
-        } catch (e: Exception) {
-            Result.failure(e)
+            Result.success(Unit)
+        } else {
+            Result.failure(response.toApiException("No se pudieron cargar los lugares"))
         }
     }
 
-    override suspend fun getVenue(id: String): Result<Venue> {
-        return try {
+    override suspend fun getVenue(id: String): Result<Venue> = remoteOrCache(
+        remote = {
             val response = api.getVenue(id)
-            if (response.isSuccessful) {
-                val dto = response.body()
-                if (dto != null) {
-                    val entity = dto.copy(id = dto.id ?: id).toEntity()
-                    venueDao.upsertVenues(listOf(entity))
-                    Result.success(entity.toDomain())
-                } else {
-                    val local = venueDao.getVenueById(id)
-                    if (local != null) Result.success(local.toDomain())
-                    else Result.failure(Exception("Lugar no encontrado"))
-                }
+            val dto = response.body()
+            if (response.isSuccessful && dto != null) {
+                val entity = dto.copy(id = dto.id ?: id).toEntity()
+                venueDao.upsertVenues(listOf(entity))
+                Result.success(entity.toDomain())
             } else {
-                val local = venueDao.getVenueById(id)
-                if (local != null) Result.success(local.toDomain())
-                else Result.failure(Exception("HTTP ${response.code()}"))
+                Result.failure(response.toApiException("No se pudo cargar el lugar"))
             }
-        } catch (e: Exception) {
-            val local = venueDao.getVenueById(id)
-            if (local != null) Result.success(local.toDomain())
-            else Result.failure(e)
-        }
-    }
+        },
+        // Sin conexión: detalle del lugar desde Room
+        cache = { venueDao.getVenueById(id)?.toDomain() }
+    )
 
-    override suspend fun getVenueEvents(venueId: String): Result<List<Event>> {
-        return try {
+    override suspend fun getVenueEvents(venueId: String): Result<List<Event>> = remoteOrCache(
+        remote = {
             val response = api.getVenueEvents(venueId)
             if (response.isSuccessful) {
-                val entities = response.body().orEmpty().mapNotNull { dto ->
-                    val id = dto.id ?: return@mapNotNull null
-                    dto.copy(id = id).toEntity()
-                }
+                val entities = response.body().orEmpty().toEventEntities()
                 // Actualiza la caché de eventos en transacción; favoritos no se tocan
-                database.withTransaction {
-                    eventDao.upsertEvents(entities)
-                }
+                database.withTransaction { eventDao.upsertEvents(entities) }
                 Result.success(entities.map { it.toDomain() })
             } else {
-                Result.failure(Exception("HTTP ${response.code()}"))
+                Result.failure(response.toApiException("No se pudieron cargar los eventos del lugar"))
             }
-        } catch (e: Exception) {
-            // Sin Internet: eventos del lugar desde Room
-            val local = eventDao.getEventsByVenue(venueId)
-            if (local.isNotEmpty()) Result.success(local.map { it.toDomain() })
-            else Result.failure(e)
-        }
-    }
+        },
+        // Sin Internet: eventos del lugar desde Room
+        cache = { eventDao.getEventsByVenue(venueId).takeIf { it.isNotEmpty() }?.map { it.toDomain() } }
+    )
 }

@@ -65,6 +65,16 @@ fun EventEntity.toDomain(): Event = Event(
     longitude = longitude
 )
 
+/**
+ * Listas de DTO → entidades descartando los elementos sin id
+ * (la API puede omitirlo en eventos y categorías incompletos).
+ */
+fun List<EventDto>.toEventEntities(): List<EventEntity> =
+    mapNotNull { dto -> dto.id?.let { id -> dto.copy(id = id).toEntity() } }
+
+fun List<CategoryDto>.toCategoryEntities(): List<CategoryEntity> =
+    mapNotNull { dto -> dto.id?.let { id -> dto.copy(id = id).toEntity() } }
+
 fun CategoryDto.toEntity(): CategoryEntity = CategoryEntity(
     id = id.orEmpty(),
     name = name.orEmpty()

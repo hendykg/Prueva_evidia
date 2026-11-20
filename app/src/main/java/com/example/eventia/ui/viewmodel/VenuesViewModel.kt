@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import com.example.eventia.domain.model.Venue
 import com.example.eventia.domain.repository.VenuesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -20,20 +19,22 @@ data class VenuesUiState(
     val errorMessage: String? = null
 )
 
+/**
+ * Lugares (RF-13): lista observable desde Room con actualización manual
+ * (RF-06) y errores compartidos con el catálogo vía [ListStatus].
+ */
 @HiltViewModel
 class VenuesViewModel @Inject constructor(
     private val repository: VenuesRepository
 ) : ViewModel() {
 
-    private val loadingFlow = MutableStateFlow(false)
-    private val refreshingFlow = MutableStateFlow(false)
-    private val errorFlow = MutableStateFlow<String?>(null)
+    private val status = ListStatus()
 
     val uiState: StateFlow<VenuesUiState> = combine(
         repository.observeVenues(),
-        loadingFlow,
-        refreshingFlow,
-        errorFlow
+        status.isLoading,
+        status.isRefreshing,
+        status.error
     ) { venues, isLoading, isRefreshing, errorMessage ->
         VenuesUiState(
             venues = venues,
@@ -48,28 +49,14 @@ class VenuesViewModel @Inject constructor(
     }
 
     fun consumeError() {
-        errorFlow.value = null
+        status.consumeError()
     }
 
     fun loadInitial() {
-        viewModelScope.launch {
-            loadingFlow.value = true
-            val result = repository.refreshVenues()
-            loadingFlow.value = false
-            result.onFailure {
-                errorFlow.value = "No se pudo actualizar. Mostrando lugares disponibles."
-            }
-        }
+        viewModelScope.launch { status.loadInitial { repository.refreshVenues() } }
     }
 
     fun refresh() {
-        viewModelScope.launch {
-            refreshingFlow.value = true
-            val result = repository.refreshVenues()
-            refreshingFlow.value = false
-            result.onFailure {
-                errorFlow.value = "No se pudo actualizar. Se conservan los datos actuales."
-            }
-        }
+        viewModelScope.launch { status.refresh { repository.refreshVenues() } }
     }
 }

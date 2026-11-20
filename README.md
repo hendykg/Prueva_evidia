@@ -79,9 +79,10 @@ Prueva_evidia/
 │           │   │   ├── EventiaApi.kt         # Interfaz Retrofit (12 endpoints)
 │           │   │   ├── AuthInterceptor.kt    # Cabecera Authorization: Bearer
 │           │   │   ├── ApiError.kt           # ApiException(code) + mensajes del servidor
+│           │   │   ├── ApiResult.kt          # apiCall/remoteOrCache: errores sin repetir try/catch
 │           │   │   └── dto/EventDto.kt       # DTOs alineados a la colección Postman
 │           │   ├── local/
-│           │   │   ├── EventiaDatabase.kt    # v3: events, categories, favorites, venues
+│           │   │   ├── EventiaDatabase.kt    # v4: events, categories, favorites, venues
 │           │   │   ├── dao/                  # EventDao, VenueDao, FavoriteDao
 │           │   │   └── entities/             # EventEntity, CategoryEntity, FavoriteEntity (snapshot), VenueEntity
 │           │   ├── datastore/SessionDataStore.kt  # token (+ tokenFlow) + lastSync
@@ -103,10 +104,13 @@ Prueva_evidia/
 │               │                                    # EventDetailScreen, VenueDetailScreen,
 │               │                                    # FavoritesScreen, AuthScreen,
 │               │                                    # ProfileScreen, MapScreen
-│               ├── components/                     # EventCard, VenueCard
-│               ├── util/                           # GeoDirections.kt (intent geo:, RF-09)
+│               ├── components/                     # EventCard, VenueCard,
+│               │                                   # ListStateBox, RefreshButton (compartidos)
+│               ├── util/                           # GeoDirections.kt (intent geo:, RF-09),
+│               │                                   # SnackbarEffect.kt (mensaje único)
 │               ├── viewmodel/                      # Events, EventDetail, Venues, VenueDetail,
-│               │                                   # Favorites, Auth, Profile, Map
+│               │                                   # Favorites, Auth, Profile, Map,
+│               │                                   # ListStatus (carga/error compartido)
 │               └── theme/                          # Color, Type, Theme (Material 3)
 ├── local.properties                  # sdk.dir (solo local, ignorado por Git)
 └── README.md                         # Este archivo
@@ -271,18 +275,18 @@ event_detail (sin sesión) ──"Inscribirme"──► auth ──éxito──�
 | GET | `/me/attendances` | Inscripciones próximas/pasadas (RF-12) | ✅ usado |
 | POST/DELETE | `/events/{id}/attendance` | Inscribirse/cancelar con confirmación del servidor | ✅ usado |
 
-Base URL: **`RetrofitRepository.BASE_URL = "http://10.0.2.2:8000/api/"`** (modo emulador)
+Base URL: **`RetrofitRepository.BASE_URL = "https://eventia.jmacboy.dev/api/"`**
 (única fuente de verdad, en `data/remote/RetrofitRepository.kt`; `NetworkModule` inyecta `RetrofitRepository.api` a toda la app — un solo Retrofit y un solo OkHttp en todo el proyecto).
 
-> **Cómo conectar el backend según el dispositivo:**
-> - **Emulador Android Studio (configuración actual):** `http://10.0.2.2:8000/api/`
->   (en el emulador, `localhost` es el propio emulador; `10.0.2.2` apunta a la PC).
-> - **Celular físico por USB:** cambiar a `http://localhost:8000/api/` y ejecutar
->   `adb reverse tcp:8000 tcp:8000` (el `localhost` del celular se redirige a tu PC).
-> - **Servidor en la nube:** la URL pública terminada en `/api/`.
-> - `AndroidManifest.xml` incluye `usesCleartextTraffic="true"` porque la API es HTTP en desarrollo.
-> - **Requisito:** el backend debe estar corriendo en el puerto 8000 de la PC
->   (sin servidor levantado, la app muestra los datos cacheados en Room).
+> **Notas de conexión:**
+> - La API está **desplegada y verificada** en `https://eventia.jmacboy.dev/api/`
+>   (comprobada con `/events`, `/events?q=…`, `/categories` y `/venues`).
+> - La URL debe terminar en `/`: Retrofit lanza excepción si no.
+> - Para probar contra un backend local, cambia `BASE_URL` a
+>   `http://10.0.2.2:8000/api/` (emulador) o `http://localhost:8000/api/` con
+>   `adb reverse tcp:8000 tcp:8000` (celular por USB); el `AndroidManifest`
+>   mantiene `usesCleartextTraffic="true"` para ese caso de desarrollo.
+> - Sin conexión, la app muestra los datos cacheados en Room (RF-05/RF-14).
 
 ---
 
@@ -309,7 +313,7 @@ Base URL: **`RetrofitRepository.BASE_URL = "http://10.0.2.2:8000/api/"`** (modo 
 | Maps Compose / Play Services Maps | 4.3.3 / 19.0.0 |
 | Android Studio | última estable instalada (SDK 35 + Build-Tools 35.x) |
 
-**Requisitos:** Android Studio (con SDK 35 y Build-Tools 35.x), JDK 17, backend de la asignatura corriendo.
+**Requisitos:** Android Studio (con SDK 35 y Build-Tools 35.x), JDK 17 y conexión a Internet (la API está desplegada en `https://eventia.jmacboy.dev/api/`).
 
 ```powershell
 cd C:\Users\Usuario\Desktop\moviles2026\PRueva\Prueva_evidia
