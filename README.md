@@ -16,7 +16,7 @@ Documento de referencia: *Proyecto Final Eventia* (RF-01 a RF-14).
 | B — Lugares | RF-13 | ✅ Implementado y compilando |
 | C — Favoritos y offline | RF-04, RF-05, RF-14 | ✅ Implementado y compilando |
 | D — Cuenta e inscripciones | RF-11, RF-12 | ✅ Implementado y compilando |
-| E — Mapa | RF-07, RF-08, RF-09 | ✅ Implementado y compilando (requiere API key de Google Maps para teselas) |
+| E — Mapa | RF-07, RF-08, RF-09 | ✅ Implementado y compilando (osmdroid, sin API key) |
 
 **Verificación de build (ejecutada):**
 
@@ -44,8 +44,8 @@ Incluye el procesamiento de **Hilt** y **Room** (KSP) sin errores.
 | Procesos asíncronos | Kotlin Coroutines | `viewModelScope`, `Flow`, `withTransaction` |
 | Navegación | Navigation Compose | `ui/navigation/EventiaNavGraph.kt` |
 | Imágenes | Coil | `AsyncImage` en `EventCard` |
-| Mapas | Maps Compose (aprobada) | `ui/screens/MapScreen.kt` + `ui/viewmodel/MapViewModel.kt` (marcadores, filtro y geo:) |
-| Versionamiento | Git con etiqueta final `v1.0` | Pendiente: etiqueta al cierre |
+| Mapas | osmdroid (permitida por el enunciado, sección 7) | `ui/screens/MapScreen.kt` + `ui/viewmodel/MapViewModel.kt` (marcadores, filtro y geo:) |
+| Versionamiento | Git con etiqueta final `v1.0` | ✅ Tag `v1.0` creada en la versión entregada |
 | DTO → Dominio | Obligatorio | `data/mapper/EventMapper.kt`, `VenueMapper.kt` |
 
 ---
@@ -231,7 +231,7 @@ MapViewModel ── combine(observeEvents(), observeCategories(), filtro)
    │             │ filtra con hasValidCoordinates():              ── RF-07
    │             │  lat ∈ [-90,90], lng ∈ [-180,180], no (0,0)
    ▼
-GoogleMap (maps-compose) ── Marker(solo eventos válidos)
+MapView (osmdroid/OpenStreetMap) ── Marker (solo eventos válidos, sin API key)
    │ tap marcador ──► EventSummaryCard (título, fecha, lugar, categoría)  ── RF-08
    │                     ├── [Ver detalle]  ──► event_detail/{id}
    │                     └── [Indicaciones] ──► Intent geo:lat,lng  (app externa)  ── RF-09
@@ -310,7 +310,7 @@ Base URL: **`RetrofitRepository.BASE_URL = "https://eventia.jmacboy.dev/api/"`**
 | DataStore Preferences | 1.1.1 |
 | Coroutines | 1.9.0 |
 | Coil | 2.7.0 |
-| Maps Compose / Play Services Maps | 4.3.3 / 19.0.0 |
+| osmdroid (OpenStreetMap) | 6.1.20 |
 | Android Studio | última estable instalada (SDK 35 + Build-Tools 35.x) |
 
 **Requisitos:** Android Studio (con SDK 35 y Build-Tools 35.x), JDK 17 y conexión a Internet (la API está desplegada en `https://eventia.jmacboy.dev/api/`).
@@ -364,7 +364,7 @@ cd C:\Users\Usuario\Desktop\moviles2026\PRueva\Prueva_evidia
 5. **Ver detalle** → abre `event_detail` del evento seleccionado; *volver* regresa al mapa (filtro conservado por `SavedStateHandle`).
 6. **Indicaciones** desde el resumen del mapa, desde el **detalle del evento** y desde el **detalle del lugar** → se abre Google Maps (u otra app de mapas) con la ruta al lugar (RF-09).
 7. Desinstar/deshabilitar apps de mapas → **Indicaciones** muestra SnackBar *“No se encontró una aplicación de mapas…”* sin cerrar la app.
-8. Modo avión → el mapa sigue mostrando marcadores desde Room (teselas de fondo requieren conexión/key).
+8. Modo avión → el mapa sigue mostrando los marcadores desde Room; las teselas de OpenStreetMap se sirven desde la caché local (sin key).
 9. Catálogo vacío → estado *“No hay eventos cargados. Actualiza el catálogo.”*
 10. Evento inexistente (404) → *“Este evento ya no está disponible”* con opción de volver.
 11. Rotar el dispositivo en cualquier pantalla → el estado se conserva.
@@ -374,7 +374,7 @@ cd C:\Users\Usuario\Desktop\moviles2026\PRueva\Prueva_evidia
 ## 7. Limitaciones y pendientes
 
 1. **Contrato de API verificado**: los DTOs (`EventDto`, `VenueDto`, `ServerErrorDto`) y la interfaz `EventiaApi` se alinearon a la colección Postman *"Eventia API"* (fecha en `startsAt`, parámetros `q`/`category`, errores `{code, message, fields}`, `GET /me/attendances` devuelve eventos). Si el backend real difiere, el mapeo en `data/mapper/` es el único lugar a corregir.
-2. **API key de Google Maps pendiente**: `MapScreen` está implementado, pero el manifest tiene el placeholder `YOUR_GOOGLE_MAPS_API_KEY`; sin la key real los marcadores y el resumen funcionan, pero **no se dibujan las teselas** del mapa. Reemplazarla en `AndroidManifest.xml` (`com.google.android.geo.API_KEY`).
+2. **Mapa sin API key**: se usa **osmdroid** (OpenStreetMap), biblioteca que el enunciado (sección 7) cita como ejemplo permitido junto a Maps Compose. No necesita key de Google, cuenta de facturación ni Google Play Services: funciona igual en un emulador sin servicios de Google. Las teselas se descargan a la caché privada de la app (`Configuration` se inicializa en `EventiaApplication`).
 3. **Clasificación próximas/pasadas**: usa `SimpleDateFormat` con varios patrones sobre la fecha local; si la API usa un formato no contemplado, las inscripciones se mostrarán como "próximas" (ajustar `ProfileViewModel.parseDateMillis`).
 4. `AuthInterceptor` usa `runBlocking` para leer el token (limitación conocida: bloquea el hilo de OkHttp, no la UI).
 5. La base de datos usa `fallbackToDestructiveMigration`: al subir la versión de esquema (v2 → v3 en este desarrollo) se borran los datos locales; en una instalación final no afecta porque es primera instalación.

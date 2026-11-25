@@ -27,28 +27,55 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.eventia.domain.model.Event
 import com.example.eventia.ui.util.NO_MAPS_APP_MESSAGE
 import com.example.eventia.ui.util.openDirections
 import com.example.eventia.ui.viewmodel.MapViewModel
-import com.google.android.gms.maps.model.CameraPosition
-import com.google.android.gms.maps.model.LatLng
-import com.google.maps.android.compose.GoogleMap
-import com.google.maps.android.compose.Marker
-import com.google.maps.android.compose.rememberCameraPositionState
-import com.google.maps.android.compose.rememberMarkerState
 import kotlinx.coroutines.launch
+import org.osmdroid.tileprovider.tilesource.TileSourcePolicy
+import org.osmdroid.tileprovider.tilesource.XYTileSource
+import org.osmdroid.util.BoundingBox
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Marker
 
+/**
+ * Teselas de OpenStreetMap con la política de osmdroid SIN el flag
+ * FLAG_USER_AGENT_NORMALIZED: la fuente MAPNIK por defecto ignora el
+ * `userAgentValue` de EventiaApplication y envía "com.example.eventia/1",
+ * y el servidor de OSM devuelve 403 a los UA que contienen "example".
+ * Con esta fuente se envía el UA personalizado, que sí es aceptado.
+ */
+private val EVENTIA_OSM = XYTileSource(
+    "Eventia OSM",
+    0, 19, 256, ".png",
+    arrayOf("https://tile.openstreetmap.org/"),
+    "© OpenStreetMap contributors",
+    TileSourcePolicy(
+        2,
+        TileSourcePolicy.FLAG_NO_BULK or TileSourcePolicy.FLAG_NO_PREVENTIVE
+    )
+)
+
+/**
+ * Módulo E (RF-07/RF-08/RF-09): mapa con marcadores de OpenStreetMap
+ * mediante **osmdroid**, la biblioteca que el enunciado (sección 7) cita
+ * como ejemplo de opción permitida. A diferencia de Google Maps, no
+ * requiere API key, facturación ni Google Play Services: funciona en
+ * cualquier dispositivo o emulador tal cual.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MapScreen(
@@ -61,21 +88,10 @@ fun MapScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
-    // Cámara: primer marcador disponible o posición por defecto (Buenos Aires)
-    val cameraPositionState = rememberCameraPositionState {
-        position = CameraPosition.fromLatLngZoom(LatLng(-34.6037, -58.3816), 3f)
-    }
-    val firstMarker = state.events
-        .firstOrNull()
-        ?.takeIf { it.latitude != null && it.longitude != null }
-    LaunchedEffect(firstMarker?.id) {
-        firstMarker?.let { event ->
-            cameraPositionState.position = CameraPosition.fromLatLngZoom(
-                LatLng(event.latitude!!, event.longitude!!),
-                if (state.events.size > 1) 6f else 12f
-            )
-        }
-    }
+    // Marcadores creados: se rehacen cuando cambia la lista filtrada (RF-07/RF-08)
+    val markers = remember { mutableListOf<Marker>() }
+    // Id del último evento centrado: evita reposicionar el mapa en cada recomposición
+    var centeredMarkerId by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Eventia · Mapa") }) },
@@ -111,27 +127,50 @@ fun MapScreen(
                     .fillMaxWidth()
                     .weight(1f)
             ) {
-                // RF-07: solo se agregan marcadores con coordenadas válidas
-                GoogleMap(
-                    modifier = Modifier.fillMaxSize(),
-                    cameraPositionState = cameraPositionState
-                ) {
-                    state.events.forEach { event ->
-                        val lat = event.latitude ?: return@forEach
-                        val lng = event.longitude ?: return@forEach
-                        Marker(
-                            state = rememberMarkerState(
-                                key = event.id,
-                                position = LatLng(lat, lng)
-                            ),
-                            title = event.title,
-                            onClick = {
-                                viewModel.selectEvent(event)
-                                true
+                // RF-07: marcadores solo con coordenadas válidas (ya filtradas)
+                AndroidView(
+                    factory = { context ->
+                        MapView(context).apply {
+                            setTileSource(EVENTIA_OSM)
+                            setMultiTouchControls(true)
+                            // Cochabamba, donde están los eventos de prueba
+                            controller.setZoom(12.0)
+                            controller.setCenter(GeoPoint(-17.417, -66.167))
+                            onResume()
+                        }
+                    },
+                    update = { map ->
+                        map.overlays.removeAll(markers)
+                        markers.clear()
+                        state.events.forEach { event ->
+                            val lat = event.latitude ?: return@forEach
+                            val lng = event.longitude ?: return@forEach
+                            val marker = Marker(map).apply {
+                                position = GeoPoint(lat, lng)
+                                title = event.title
+                                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                                setOnMarkerClickListener { _, _ ->
+                                    viewModel.selectEvent(event)
+                                    true // consume el clic: el resumen es la tarjeta propia
+                                }
                             }
-                        )
+                            markers += marker
+                            map.overlays.add(marker)
+                        }
+                        map.invalidate()
+
+                        // Centrar solo cuando cambia el primer evento visible
+                        val first = state.events.firstOrNull { it.latitude != null && it.longitude != null }
+                        if (first != null && centeredMarkerId != first.id) {
+                            centeredMarkerId = first.id
+                            map.centerOn(state.events)
+                        }
+                    },
+                    onRelease = { map ->
+                        map.onPause()
+                        map.onDetach()
                     }
-                }
+                )
 
                 if (!state.isLoading && state.events.isEmpty()) {
                     Text(
@@ -178,6 +217,28 @@ fun MapScreen(
                 }
             }
         }
+    }
+}
+
+/**
+ * Centra el mapa para que se vean todos los marcadores: encuadre de la
+ * caja que los contiene, o zoom cercano si hay un solo punto (o si todos
+ * caen en el mismo lugar, para no quedarse en una vista de país).
+ */
+private fun MapView.centerOn(events: List<Event>) {
+    val points = events.mapNotNull { event ->
+        val lat = event.latitude ?: return@mapNotNull null
+        val lng = event.longitude ?: return@mapNotNull null
+        GeoPoint(lat, lng)
+    }
+    val first = points.firstOrNull() ?: return
+    val box = BoundingBox.fromGeoPoints(points)
+    val isTinyBox = box.latNorth - box.latSouth < 0.001 && box.lonEast - box.lonWest < 0.001
+    if (points.size == 1 || isTinyBox) {
+        controller.setZoom(14.0)
+        controller.setCenter(first)
+    } else {
+        zoomToBoundingBox(box, false)
     }
 }
 

@@ -30,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.eventia.ui.viewmodel.AuthMode
@@ -145,8 +146,8 @@ fun AuthScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(
-                    if (state.mode == AuthMode.LOGIN) "¿No tienes cuenta? Regístrate"
-                    else "¿Ya tienes cuenta? Inicia sesión"
+                    if (state.mode == AuthMode.LOGIN) "Regístrate"
+                    else "Inicia sesión"
                 )
             }
         }
